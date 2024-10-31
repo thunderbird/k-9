@@ -551,7 +551,7 @@ jobs:
             🟡 [${{ needs.dump_config.outputs.releaseType }} build ${{ github.run_number}}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
             waiting for publish approval (triggered by ${{ needs.notify_build_start.outputs.actorLink }})
 
-  pre_publish:
+  publish_hold:
     # This is a holding job meant to require approval before proceeding with the publishing jobs below
     # The environment has a deployment protection rule requiring approval from a set of named reviewers
     # before proceeding.
@@ -566,20 +566,24 @@ jobs:
         run: |
           true
 
-  publish_release:
-    name: Publish Release
-    needs: [pre_publish, dump_config, release_commit]
+  pkginfo:
+    # Generate pkginfo used by the publish jobs and the release notes
+    name: Generate PkgInfo
+    needs: [publish_hold, dump_config, release_commit]
     if: ${{ !failure() && !cancelled() }} # Run if previous step is skipped
     runs-on: ubuntu-latest
     strategy:
       matrix:
         include: "${{ fromJSON(needs.dump_config.outputs.matrixInclude) }}"
-    environment: publish_release
     outputs:
-      thunderbird_release_url: ${{ steps.summary.outputs.thunderbird_release_url }}
-      k9mail_release_url: ${{ steps.summary.outputs.k9mail_release_url }}
-      thunderbird_full_version_name: ${{ steps.summary.outputs.thunderbird_full_version_name }}
-      k9mail_full_version_name: ${{ steps.summary.outputs.k9mail_full_version_name }}
+      TAG_NAME: ${{ steps.pkginfo.outputs.TAG_NAME }}
+      FULL_VERSION_NAME: ${{ steps.pkginfo.outputs.FULL_VERSION_NAME }}
+      VERSION_NAME: ${{ steps.pkginfo.outputs.VERSION_NAME }}
+      VERSION_CODE: ${{ steps.pkginfo.outputs.VERSION_CODE }}
+      APPLICATION_ID: ${{ steps.pkginfo.outputs.APPLICATION_ID }}
+      app_sha: ${{ steps.shanotes.outputs.app_sha }}
+      app_github_notes: ${{ steps.shanotes.outputs.app_github_notes }}
+      PKG_FILE: ${{ steps.rename.outputs.PKG_FILE }}
     env:
       RELEASE_TYPE: ${{ needs.dump_config.outputs.releaseType }}
       APP_NAME: ${{ matrix.appName }}
@@ -633,27 +637,6 @@ jobs:
 
           cat $GITHUB_OUTPUT
 
-      - name: Rename release assets
-        id: rename
-        shell: bash
-        env:
-          VERSION_NAME: ${{ steps.pkginfo.outputs.VERSION_NAME }}
-        run: |
-          PKG_FILE="${APP_NAME}-${PACKAGE_FLAVOR}-${RELEASE_TYPE}.${PACKAGE_FORMAT}"
-          PKG_FILE_PRETTY="${APP_NAME}-${VERSION_NAME}.${PACKAGE_FORMAT}"
-          mv uploads/${PKG_FILE} uploads/${PKG_FILE_PRETTY}
-
-          echo "PKG_FILE=${PKG_FILE_PRETTY}" >> $GITHUB_OUTPUT
-          ls -l uploads/${PKG_FILE_PRETTY}
-
-      - name: App Token Generate
-        uses: actions/create-github-app-token@v1
-        if: ${{ contains(matrix.releaseTarget, 'github') && vars.RELEASER_APP_CLIENT_ID }}
-        id: app-token
-        with:
-          app-id: ${{ vars.RELEASER_APP_CLIENT_ID }}
-          private-key: ${{ secrets.RELEASER_APP_PRIVATE_KEY }}
-
       - name: Get release sha and notes
         id: shanotes
         shell: bash
@@ -674,29 +657,93 @@ jobs:
 
           cat $GITHUB_OUTPUT
 
+      - name: Rename release assets
+        id: rename
+        shell: bash
+        env:
+          VERSION_NAME: ${{ steps.pkginfo.outputs.VERSION_NAME }}
+        run: |
+          PKG_FILE="${APP_NAME}-${PACKAGE_FLAVOR}-${RELEASE_TYPE}.${PACKAGE_FORMAT}"
+          PKG_FILE_PRETTY="${APP_NAME}-${VERSION_NAME}.${PACKAGE_FORMAT}"
+          mv uploads/${PKG_FILE} uploads/${PKG_FILE_PRETTY}
+
+          echo "PKG_FILE=${PKG_FILE_PRETTY}" >> $GITHUB_OUTPUT
+          ls -l uploads/${PKG_FILE_PRETTY}
+
+      - name: Upload renamed
+        uses: actions/upload-artifact@v4
+        with:
+          name: renamed-${{ matrix.appName }}-${{ matrix.packageFormat }}-${{ matrix.packageFlavor || 'default' }}
+          if-no-files-found: error
+          path: uploads/
+
+  publish_release_github:
+    name: Publish Release Github
+    needs: [publish_hold, dump_config, release_commit, pkginfo]
+    if: ${{ !failure() && !cancelled() }} # Run if previous step is skipped
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include: "${{ fromJSON(needs.dump_config.outputs.matrixInclude) }}"
+    environment: publish_release
+    outputs:
+      ghReleaseUrl: ${{ steps.publish_gh.outputs.url }}
+    env:
+      RELEASE_TYPE: ${{ needs.dump_config.outputs.releaseType }}
+      APP_NAME: ${{ matrix.appName }}
+      PACKAGE_FLAVOR: ${{ matrix.packageFlavor || 'default' }}
+      PACKAGE_FORMAT: ${{ matrix.packageFormat }}
+    permissions:
+      contents: 'write'  # For creating releases
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: renamed-${{ matrix.appName }}-${{ matrix.packageFormat }}-${{ matrix.packageFlavor || 'default' }}
+          path: "uploads/"
+
       - name: Publish to GitHub Releases
         id: publish_gh
         if: ${{ contains(matrix.releaseTarget, 'github') }}
         uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191  # v2.0.8
         with:
-          token: ${{ steps.app-token.outputs.token || github.token }}
-          target_commitish: ${{ steps.shanotes.outputs.app_sha }}
-          tag_name: ${{ steps.pkginfo.outputs.TAG_NAME }}
-          name: ${{ steps.pkginfo.outputs.FULL_VERSION_NAME }}
-          body: ${{ steps.shanotes.outputs.app_github_notes }}
+          token: ${{ github.token }}
+          target_commitish: ${{ needs.pkginfo.outputs.app_sha }}
+          tag_name: ${{ needs.pkginfo.outputs.TAG_NAME }}
+          name: ${{ needs.pkginfo.outputs.FULL_VERSION_NAME }}
+          body: ${{ needs.pkginfo.outputs.app_github_notes }}
           prerelease: ${{ env.RELEASE_TYPE != 'release' }}
           fail_on_unmatched_files: true
           files: |
-            uploads/${{ steps.rename.outputs.PKG_FILE }}
+            uploads/${{ needs.pkginfo.outputs.PKG_FILE }}
+
+  publish_release_playstore:
+    name: Publish Release Play Store
+    needs: [publish_hold, dump_config, release_commit, pkginfo]
+    if: ${{ !failure() && !cancelled() }} # Run if previous step is skipped
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include: "${{ fromJSON(needs.dump_config.outputs.matrixInclude) }}"
+    environment: publish_release
+    env:
+      RELEASE_TYPE: ${{ needs.dump_config.outputs.releaseType }}
+      APP_NAME: ${{ matrix.appName }}
+      PACKAGE_FLAVOR: ${{ matrix.packageFlavor || 'default' }}
+      PACKAGE_FORMAT: ${{ matrix.packageFormat }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: renamed-${{ matrix.appName }}-${{ matrix.packageFormat }}-${{ matrix.packageFlavor || 'default' }}
+          path: "uploads/"
 
       - name: Adjust release notes for play store upload
         if: ${{ !inputs.skipGooglePlay && contains(matrix.releaseTarget, 'play') && matrix.playTargetTrack }}
         shell: bash
         env:
-          VERSION_CODE: ${{ steps.pkginfo.outputs.VERSION_CODE }}
-          APPLICATION_ID: ${{ steps.pkginfo.outputs.APPLICATION_ID }}
+          VERSION_CODE: ${{ needs.pkginfo.outputs.VERSION_CODE }}
+          APPLICATION_ID: ${{ needs.pkginfo.outputs.APPLICATION_ID }}
           REPO: ${{ github.repository }}
-          APP_SHA: ${{ steps.shanotes.outputs.app_sha }}
+          APP_SHA: ${{ needs.pkginfo.outputs.app_sha }}
         run: |
           # r0adkll/upload-google-play expects the release notes in a different structure
           FILEPATH=app-metadata/${APPLICATION_ID}/en-US/changelogs/${VERSION_CODE}.txt
@@ -709,26 +756,45 @@ jobs:
         if: ${{ !inputs.skipGooglePlay && contains(matrix.releaseTarget, 'play') && matrix.playTargetTrack }}
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_ACCOUNT }}
-          packageName: ${{ steps.pkginfo.outputs.APPLICATION_ID }}
+          packageName: ${{ needs.pkginfo.outputs.APPLICATION_ID }}
           track: ${{ matrix.playTargetTrack }}
-          releaseName: ${{ steps.pkginfo.outputs.VERSION_NAME }}
+          releaseName: ${{ needs.pkginfo.outputs.VERSION_NAME }}
           status: completed
           changesNotSentForReview: ${{ inputs.draftGooglePlay }}
           whatsNewDirectory: whatsnew
           releaseFiles: |
-            uploads/${{ steps.rename.outputs.PKG_FILE }}
+            uploads/${{ needs.pkginfo.outputs.PKG_FILE }}
 
+  publish_summary:
+    name: Publish Release Play Store
+    needs: [publish_hold, dump_config, release_commit, pkginfo, publish_release_github, publish_release_playstore]
+    if: ${{ !failure() && !cancelled() }} # Run if previous step is skipped
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include: "${{ fromJSON(needs.dump_config.outputs.matrixInclude) }}"
+    outputs:
+      thunderbird_release_url: ${{ steps.summary.outputs.thunderbird_release_url }}
+      k9mail_release_url: ${{ steps.summary.outputs.k9mail_release_url }}
+      thunderbird_full_version_name: ${{ steps.summary.outputs.thunderbird_full_version_name }}
+      k9mail_full_version_name: ${{ steps.summary.outputs.k9mail_full_version_name }}
+    env:
+      RELEASE_TYPE: ${{ needs.dump_config.outputs.releaseType }}
+      APP_NAME: ${{ matrix.appName }}
+      PACKAGE_FLAVOR: ${{ matrix.packageFlavor || 'default' }}
+      PACKAGE_FORMAT: ${{ matrix.packageFormat }}
+    steps:
       - name: Summary
         uses: actions/github-script@v7
         id: summary
         env:
-          tagName: ${{ steps.pkginfo.outputs.TAG_NAME }}
-          fullVersionName: ${{ steps.pkginfo.outputs.FULL_VERSION_NAME }}
-          ghReleaseUrl: ${{ steps.publish_gh.outputs.url }}
+          tagName: ${{ needs.pkginfo.outputs.TAG_NAME }}
+          fullVersionName: ${{ needs.pkginfo.outputs.FULL_VERSION_NAME }}
+          ghReleaseUrl: ${{ needs.publish_release_github.outputs.ghReleaseUrl }}
           playTargetTrack: ${{ matrix.playTargetTrack }}
-          applicationId: ${{ steps.pkginfo.outputs.APPLICATION_ID }}
+          applicationId: ${{ needs.pkginfo.outputs.APPLICATION_ID }}
           releaseTarget: ${{ matrix.releaseTarget }}
-          appSha: ${{ steps.shanotes.outputs.app_sha }}
+          appSha: ${{ needs.pkginfo.outputs.app_sha }}
           appName: ${{ matrix.appName }}
           skipGooglePlay: ${{ inputs.skipGooglePlay }}
         with:
@@ -764,7 +830,7 @@ jobs:
   notify_build_result:
     name: Notify Build Result
     if: ${{ always() }}
-    needs: [dump_config, release_commit, build_unsigned, sign_mobile, publish_release, notify_build_start]
+    needs: [dump_config, release_commit, build_unsigned, sign_mobile, publish_summary, notify_build_start]
     runs-on: ubuntu-latest
     environment: notify_matrix
     steps:
@@ -824,24 +890,24 @@ jobs:
             has succeeded (triggered by ${{ needs.notify_build_start.outputs.actorLink }})
 
       - name: Thunderbird Publish URL (Beta/Release)
-        if: ${{ vars.MATRIX_NOTIFY_ROOM && needs.publish_release.outputs.thunderbird_release_url && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+        if: ${{ vars.MATRIX_NOTIFY_ROOM && needs.publish_summary.outputs.thunderbird_release_url && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
         uses: kewisch/action-matrix-notify@v1
         with:
           matrixHomeserver: ${{ vars.MATRIX_NOTIFY_HOMESERVER }}
           matrixRoomId: ${{ vars.MATRIX_NOTIFY_ROOM }}
           matrixToken: ${{ secrets.MATRIX_NOTIFY_TOKEN }}
           message: >-
-            ${{ needs.publish_release.outputs.thunderbird_full_version_name }} [is available](${{ needs.publish_release.outputs.thunderbird_release_url }})
+            ${{ needs.publish_summary.outputs.thunderbird_full_version_name }} [is available](${{ needs.publish_summary.outputs.thunderbird_release_url }})
 
       - name: K-9 Mail Publish URL (Beta/Release)
-        if: ${{ vars.MATRIX_NOTIFY_ROOM && needs.publish_release.outputs.k9mail_release_url && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+        if: ${{ vars.MATRIX_NOTIFY_ROOM && needs.publish_summary.outputs.k9mail_release_url && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
         uses: kewisch/action-matrix-notify@v1
         with:
           matrixHomeserver: ${{ vars.MATRIX_NOTIFY_HOMESERVER }}
           matrixRoomId: ${{ vars.MATRIX_NOTIFY_ROOM }}
           matrixToken: ${{ secrets.MATRIX_NOTIFY_TOKEN }}
           message: >-
-            ${{ needs.publish_release.outputs.k9mail_full_version_name }} [is available](${{ needs.publish_release.outputs.k9mail_release_url }})
+            ${{ needs.publish_summary.outputs.k9mail_full_version_name }} [is available](${{ needs.publish_summary.outputs.k9mail_release_url }})
 
       - name: Notify Success (Daily)
         if: ${{ vars.MATRIX_NOTIFY_ROOM && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') && needs.dump_config.outputs.releaseType == 'daily' && steps.last_status.outputs.last_status == 'failure' }}
