@@ -71,6 +71,9 @@ class RecipientMvpView(private val activity: MessageCompose) : View.OnFocusChang
     val bccRecipients: List<Recipient>
         get() = bccView.objects
 
+    val isToAddressAdded: Boolean
+        get() = presenter.isToAddressAdded()
+
     val isCcTextEmpty: Boolean
         get() = ccView.text.isEmpty()
 

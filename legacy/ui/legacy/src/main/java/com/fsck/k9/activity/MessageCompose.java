@@ -4,7 +4,6 @@ package com.fsck.k9.activity;
 import java.io.File;
 import java.util.Date;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -19,7 +18,6 @@ import android.content.IntentSender;
 import android.content.IntentSender.SendIntentException;
 import android.content.pm.ActivityInfo;
 import android.net.Uri;
-import android.nfc.NfcAdapter;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
@@ -110,6 +108,8 @@ import app.k9mail.legacy.search.LocalSearch;
 import com.fsck.k9.ui.R;
 import com.fsck.k9.ui.base.K9Activity;
 import app.k9mail.legacy.ui.theme.ThemeManager;
+import com.fsck.k9.ui.compose.IntentData;
+import com.fsck.k9.ui.compose.IntentDataMapper;
 import com.fsck.k9.ui.compose.QuotedMessageMvpView;
 import com.fsck.k9.ui.compose.QuotedMessagePresenter;
 import com.fsck.k9.ui.compose.WrapUriTextWatcher;
@@ -118,16 +118,15 @@ import com.fsck.k9.ui.messagelist.DefaultFolderProvider;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textview.MaterialTextView;
 import org.openintents.openpgp.OpenPgpApiManager;
-import org.openintents.openpgp.util.OpenPgpApi;
 import org.openintents.openpgp.util.OpenPgpIntentStarter;
 import timber.log.Timber;
 
 
 @SuppressWarnings("deprecation") // TODO get rid of activity dialogs and indeterminate progress bars
 public class MessageCompose extends K9Activity implements OnClickListener,
-        CancelListener, AttachmentDownloadCancelListener, OnFocusChangeListener,
-        OnOpenPgpInlineChangeListener, OnOpenPgpSignOnlyChangeListener, MessageBuilder.Callback,
-        AttachmentPresenter.AttachmentsChangedListener, OnOpenPgpDisableListener {
+    CancelListener, AttachmentDownloadCancelListener, OnFocusChangeListener,
+    OnOpenPgpInlineChangeListener, OnOpenPgpSignOnlyChangeListener, MessageBuilder.Callback,
+    AttachmentPresenter.AttachmentsChangedListener, OnOpenPgpDisableListener {
 
     private static final int DIALOG_SAVE_OR_DISCARD_DRAFT_MESSAGE = 1;
     private static final int DIALOG_CONFIRM_DISCARD_ON_BACK = 2;
@@ -140,7 +139,7 @@ public class MessageCompose extends K9Activity implements OnClickListener,
     public static final String ACTION_FORWARD = "com.fsck.k9.intent.action.FORWARD";
     public static final String ACTION_FORWARD_AS_ATTACHMENT = "com.fsck.k9.intent.action.FORWARD_AS_ATTACHMENT";
     public static final String ACTION_EDIT_DRAFT = "com.fsck.k9.intent.action.EDIT_DRAFT";
-    private static final String ACTION_AUTOCRYPT_PEER = "org.autocrypt.PEER_ACTION";
+    public static final String ACTION_AUTOCRYPT_PEER = "org.autocrypt.PEER_ACTION";
 
     public static final String EXTRA_ACCOUNT = "account";
     public static final String EXTRA_MESSAGE_REFERENCE = "message_reference";
@@ -185,6 +184,8 @@ public class MessageCompose extends K9Activity implements OnClickListener,
     private final MessagingController messagingController = DI.get(MessagingController.class);
     private final Preferences preferences = DI.get(Preferences.class);
 
+    private final IntentDataMapper indentDataMapper = DI.get(IntentDataMapper.class);
+
     private final Contacts contacts = DI.get(Contacts.class);
 
     private QuotedMessagePresenter quotedMessagePresenter;
@@ -222,6 +223,7 @@ public class MessageCompose extends K9Activity implements OnClickListener,
 
     private Action action;
 
+    private RecipientMvpView recipientMvpView;
     private boolean requestReadReceipt = false;
 
     private MaterialTextView chooseIdentityView;
@@ -304,7 +306,7 @@ public class MessageCompose extends K9Activity implements OnClickListener,
         ReplyToView replyToView = new ReplyToView(this);
         replyToPresenter = new ReplyToPresenter(replyToView);
 
-        RecipientMvpView recipientMvpView = new RecipientMvpView(this);
+        recipientMvpView = new RecipientMvpView(this);
         ComposePgpInlineDecider composePgpInlineDecider = new ComposePgpInlineDecider();
         ComposePgpEnableByDefaultDecider composePgpEnableByDefaultDecider = new ComposePgpEnableByDefaultDecider();
 
@@ -374,14 +376,44 @@ public class MessageCompose extends K9Activity implements OnClickListener,
             relatedMessageProcessed = savedInstanceState.getBoolean(STATE_KEY_SOURCE_MESSAGE_PROCED, false);
         }
 
+        IntentData intentData = indentDataMapper.initFromIntent(intent);
 
-        if (initFromIntent(intent)) {
+        if (intentData.getMailToUri() != null) {
+            Uri uri = intentData.getMailToUri();
+            if (MailTo.isMailTo(uri)) {
+                MailTo mailTo = MailTo.parse(uri);
+                initializeFromMailto(mailTo);
+            }
+        }
+
+        if (intentData.getExtraText() != null && messageContentView.getText().length() == 0) {
+            messageContentView.setText(CrLfConverter.toLf(intentData.getExtraText()));
+        }
+
+        if (intentData.getExtraStream() != null) {
+            attachmentPresenter.addExternalAttachment(intentData.getExtraStream(), intentData.getIntentType());
+        }
+
+        if (intentData.getSubject() != null && subjectView.getText().length() == 0) {
+            subjectView.setText(intentData.getSubject());
+        }
+
+        if (intentData.getShouldInitFromSendOrViewIntent()) {
+            recipientPresenter.initFromSendOrViewIntent(intent);
+        }
+
+        if (intentData.getTrustId() != null) {
+            recipientPresenter.initFromTrustIdAction(intentData.getTrustId());
+        }
+
+        if (intentData.getStartedByExternalIntent()) {
             action = Action.COMPOSE;
             changesMadeSinceLastSave = true;
         } else {
             String action = intent.getAction();
             if (ACTION_COMPOSE.equals(action)) {
                 this.action = Action.COMPOSE;
+                recipientMvpView.requestFocusOnToField();
             } else if (ACTION_REPLY.equals(action)) {
                 this.action = Action.REPLY;
             } else if (ACTION_REPLY_ALL.equals(action)) {
@@ -450,15 +482,6 @@ public class MessageCompose extends K9Activity implements OnClickListener,
             relatedFlag = Flag.FORWARDED;
         }
 
-        if (action == Action.REPLY || action == Action.REPLY_ALL ||
-                action == Action.EDIT_DRAFT) {
-            //change focus to message body.
-            messageContentView.requestFocus();
-        } else {
-            // Explicitly set focus to "To:" input field (see issue 2998)
-            recipientMvpView.requestFocusOnToField();
-        }
-
         updateMessageFormat();
 
         // Set font size of input controls
@@ -480,109 +503,7 @@ public class MessageCompose extends K9Activity implements OnClickListener,
             setProgressBarIndeterminateVisibility(true);
             currentMessageBuilder.reattachCallback(this);
         }
-    }
 
-    /**
-     * Handle external intents that trigger the message compose activity.
-     *
-     * <p>
-     * Supported external intents:
-     * <ul>
-     *   <li>{@link Intent#ACTION_VIEW}</li>
-     *   <li>{@link Intent#ACTION_SENDTO}</li>
-     *   <li>{@link Intent#ACTION_SEND}</li>
-     *   <li>{@link Intent#ACTION_SEND_MULTIPLE}</li>
-     * </ul>
-     * </p>
-     *
-     * @param intent
-     *         The (external) intent that started the activity.
-     *
-     * @return {@code true}, if this activity was started by an external intent. {@code false},
-     *         otherwise.
-     */
-    private boolean initFromIntent(final Intent intent) {
-        boolean startedByExternalIntent = false;
-        final String action = intent.getAction();
-
-        if (Intent.ACTION_VIEW.equals(action) || Intent.ACTION_SENDTO.equals(action) || NfcAdapter.ACTION_NDEF_DISCOVERED.equals(action)) {
-            /*
-             * Someone has clicked a mailto: link, or scanned an NFC tag. The address is in the URI.
-             */
-            if (intent.getData() != null) {
-                Uri uri = intent.getData();
-                if (MailTo.isMailTo(uri)) {
-                    MailTo mailTo = MailTo.parse(uri);
-                    initializeFromMailto(mailTo);
-                }
-            }
-
-            /*
-             * Note: According to the documentation ACTION_VIEW and ACTION_SENDTO don't accept
-             * EXTRA_* parameters.
-             * And previously we didn't process these EXTRAs. But it looks like nobody bothers to
-             * read the official documentation and just copies wrong sample code that happens to
-             * work with the AOSP Email application. And because even big players get this wrong,
-             * we're now finally giving in and read the EXTRAs for those actions (below).
-             */
-        }
-
-        if (Intent.ACTION_SEND.equals(action) || Intent.ACTION_SEND_MULTIPLE.equals(action) ||
-                Intent.ACTION_SENDTO.equals(action) || Intent.ACTION_VIEW.equals(action)) {
-            startedByExternalIntent = true;
-
-            /*
-             * Note: Here we allow a slight deviation from the documented behavior.
-             * EXTRA_TEXT is used as message body (if available) regardless of the MIME
-             * type of the intent. In addition one or multiple attachments can be added
-             * using EXTRA_STREAM.
-             */
-            CharSequence text = intent.getCharSequenceExtra(Intent.EXTRA_TEXT);
-            // Only use EXTRA_TEXT if the body hasn't already been set by the mailto URI
-            if (text != null && messageContentView.getText().length() == 0) {
-                messageContentView.setText(CrLfConverter.toLf(text));
-            }
-
-            String type = intent.getType();
-            if (Intent.ACTION_SEND.equals(action)) {
-                Uri stream = IntentCompat.getParcelableExtra(intent,Intent.EXTRA_STREAM, Uri.class);
-                if (stream != null) {
-                    attachmentPresenter.addExternalAttachment(stream, type);
-                }
-            } else {
-                List<Parcelable> list = IntentCompat.getParcelableArrayListExtra(
-                    intent,
-                    Intent.EXTRA_STREAM,
-                    Parcelable.class
-                );
-                if (list != null) {
-                    for (Parcelable parcelable : list) {
-                        Uri stream = (Uri) parcelable;
-                        if (stream != null) {
-                            attachmentPresenter.addExternalAttachment(stream, type);
-                        }
-                    }
-                }
-            }
-
-            String subject = intent.getStringExtra(Intent.EXTRA_SUBJECT);
-            // Only use EXTRA_SUBJECT if the subject hasn't already been set by the mailto URI
-            if (subject != null && subjectView.getText().length() == 0) {
-                subjectView.setText(subject);
-            }
-
-            recipientPresenter.initFromSendOrViewIntent(intent);
-        }
-
-        if (ACTION_AUTOCRYPT_PEER.equals(action)) {
-            String trustId = intent.getStringExtra(OpenPgpApi.EXTRA_AUTOCRYPT_PEER_ID);
-            if (trustId != null) {
-                recipientPresenter.initFromTrustIdAction(trustId);
-                startedByExternalIntent = true;
-            }
-        }
-
-        return startedByExternalIntent;
     }
 
     @Override
@@ -1677,6 +1598,14 @@ public class MessageCompose extends K9Activity implements OnClickListener,
         public void onMessageViewInfoLoadFinished(MessageViewInfo messageViewInfo) {
             internalMessageHandler.sendEmptyMessage(MSG_PROGRESS_OFF);
             loadLocalMessageForDisplay(messageViewInfo, action);
+
+            if(!recipientPresenter.isToAddressAdded()) {
+                recipientMvpView.requestFocusOnToField();
+            } else if (subjectView.getText().length() == 0) {
+                subjectView.requestFocus();
+            } else {
+                messageContentView.requestFocus();
+            }
         }
 
         @Override
