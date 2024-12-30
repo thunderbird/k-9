@@ -4,11 +4,13 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -19,6 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.coerceAtMost
 import androidx.compose.ui.unit.dp
 import app.k9mail.core.ui.compose.designsystem.atom.Surface
 import app.k9mail.core.ui.compose.designsystem.atom.button.ButtonFilled
@@ -88,25 +91,34 @@ internal fun WelcomeContent(
 private fun WelcomeLogo(
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
+    BoxWithConstraints (
+        modifier = modifier
+            .fillMaxWidth()
+            .wrapContentHeight(),
+        contentAlignment = Alignment.Center,
+        ) {
+            val maxLogoSize = maxWidth * 0.3f
+            val circleSize = maxLogoSize.coerceAtMost(150.dp)
+            val logoSize = (circleSize * 0.7f).coerceAtMost(100.dp)
+
         Box(
             modifier = Modifier
                 .clip(CircleShape)
                 .background(Color(CIRCLE_COLOR))
-                .size(CIRCLE_SIZE_DP.dp),
+                .size(circleSize),
         ) {
             Image(
                 painter = painterResource(id = MainTheme.images.logo),
                 contentDescription = null,
                 modifier = Modifier
-                    .size(LOGO_SIZE_DP.dp)
+                    .size(logoSize)
                     .align(Alignment.Center),
             )
         }
+
+
     }
+
 }
 
 @Composable
