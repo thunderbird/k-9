@@ -17,12 +17,12 @@ internal interface DrawerContract {
         val config: DrawerConfig = DrawerConfig(
             showUnifiedFolders = false,
             showStarredCount = false,
+            showAccountSelector = true,
         ),
         val accounts: ImmutableList<DisplayAccount> = persistentListOf(),
         val selectedAccountId: String? = null,
         val folders: ImmutableList<DisplayFolder> = persistentListOf(),
         val selectedFolderId: String? = null,
-        val showAccountSelector: Boolean = true,
         val isLoading: Boolean = false,
     )
 

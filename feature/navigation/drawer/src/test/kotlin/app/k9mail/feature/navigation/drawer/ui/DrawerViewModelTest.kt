@@ -363,14 +363,16 @@ internal class DrawerViewModelTest {
     fun `should change state when OnAccountSelectorClick event is received`() = runMviTest {
         val testSubject = createTestSubject()
         val turbines = turbinesWithInitialStateCheck(testSubject, State())
+        val drawerConfigWithAccountSelectorEnabled = createDrawerConfig(showAccountSelector = true)
+        val drawerConfigWithAccountSelectorDisabled = createDrawerConfig(showAccountSelector = false)
 
         testSubject.event(Event.OnAccountSelectorClick)
 
-        assertThat(turbines.awaitStateItem()).isEqualTo(State(showAccountSelector = false))
+        assertThat(turbines.awaitStateItem()).isEqualTo(State(config = drawerConfigWithAccountSelectorDisabled))
 
         testSubject.event(Event.OnAccountSelectorClick)
 
-        assertThat(turbines.awaitStateItem()).isEqualTo(State(showAccountSelector = true))
+        assertThat(turbines.awaitStateItem()).isEqualTo(State(config = drawerConfigWithAccountSelectorEnabled))
     }
 
     @Test
@@ -414,16 +416,19 @@ internal class DrawerViewModelTest {
             },
             syncAccount = { syncAccountFlow },
             syncAllAccounts = { syncAllAccounts },
+            saveDrawerConfig = { flow { emit(Unit) } },
         )
     }
 
     private fun createDrawerConfig(
         showUnifiedInbox: Boolean = false,
         showStarredCount: Boolean = false,
+        showAccountSelector: Boolean = true,
     ): DrawerConfig {
         return DrawerConfig(
             showUnifiedFolders = showUnifiedInbox,
             showStarredCount = showStarredCount,
+            showAccountSelector = showAccountSelector,
         )
     }
 

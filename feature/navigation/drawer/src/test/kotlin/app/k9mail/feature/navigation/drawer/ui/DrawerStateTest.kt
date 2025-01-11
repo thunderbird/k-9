@@ -18,12 +18,12 @@ internal class DrawerStateTest {
                 config = DrawerConfig(
                     showUnifiedFolders = false,
                     showStarredCount = false,
+                    showAccountSelector = true,
                 ),
                 accounts = persistentListOf(),
                 selectedAccountId = null,
                 folders = persistentListOf(),
                 selectedFolderId = null,
-                showAccountSelector = true,
                 isLoading = false,
             ),
         )

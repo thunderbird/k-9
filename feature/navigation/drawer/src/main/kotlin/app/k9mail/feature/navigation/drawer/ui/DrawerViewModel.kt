@@ -26,6 +26,7 @@ import kotlinx.coroutines.launch
 @Suppress("MagicNumber", "TooManyFunctions")
 internal class DrawerViewModel(
     private val getDrawerConfig: UseCase.GetDrawerConfig,
+    private val saveDrawerConfig: UseCase.SaveDrawerConfig,
     private val getDisplayAccounts: UseCase.GetDisplayAccounts,
     private val getDisplayFoldersForAccount: UseCase.GetDisplayFoldersForAccount,
     private val syncAccount: UseCase.SyncAccount,
@@ -113,7 +114,19 @@ internal class DrawerViewModel(
                 )
             }
 
-            Event.OnAccountSelectorClick -> updateState { it.copy(showAccountSelector = it.showAccountSelector.not()) }
+            Event.OnAccountSelectorClick -> {
+                viewModelScope.launch {
+                    saveDrawerConfig.invoke(
+                        state.value.config.copy(showAccountSelector = state.value.config.showAccountSelector.not()),
+                    ).collect {
+                        updateState {
+                            it.copy(
+                                config = it.config.copy(showAccountSelector = it.config.showAccountSelector.not()),
+                            )
+                        }
+                    }
+                }
+            }
             Event.OnManageFoldersClick -> emitEffect(Effect.OpenManageFolders)
             Event.OnSettingsClick -> emitEffect(Effect.OpenSettings)
             Event.OnSyncAccount -> onSyncAccount()

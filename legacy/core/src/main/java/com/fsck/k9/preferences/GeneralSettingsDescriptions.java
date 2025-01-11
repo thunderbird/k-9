@@ -174,6 +174,9 @@ class GeneralSettingsDescriptions {
                 new V(69, new BooleanSetting(true)),
                 new V(101, new BooleanSetting(false))
         ));
+        s.put("isShowAccountSelector", Settings.versions(
+            new V(102, new BooleanSetting(true))
+        ));
         s.put("sortTypeEnum", Settings.versions(
                 new V(10, new EnumSetting<>(SortType.class, Account.DEFAULT_SORT_TYPE))
         ));
