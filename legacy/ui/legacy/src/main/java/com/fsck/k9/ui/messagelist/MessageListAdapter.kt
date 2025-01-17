@@ -26,6 +26,7 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.RecyclerView.NO_POSITION
 import app.k9mail.core.ui.legacy.designsystem.atom.icon.Icons
+import app.k9mail.core.ui.theme.api.ThemeColorHelper
 import app.k9mail.legacy.message.controller.MessageReference
 import com.fsck.k9.FontSizes
 import com.fsck.k9.UiDensity
@@ -57,21 +58,18 @@ class MessageListAdapter internal constructor(
     private val answeredIcon: Drawable = ResourcesCompat.getDrawable(res, Icons.Outlined.Reply, theme)!!
     private val forwardedAnsweredIcon: Drawable =
         ResourcesCompat.getDrawable(res, Icons.Outlined.CompareArrows, theme)!!
-    private val activeItemBackgroundColor: Int = theme.resolveColorAttribute(
-        colorAttrId = R.attr.messageListActiveItemBackgroundColor,
-        alphaFractionAttrId = R.attr.messageListActiveItemBackgroundAlphaFraction,
-        backgroundColorAttrId = R.attr.messageListActiveItemBackgroundAlphaBackground,
-    )
-    private val selectedItemBackgroundColor: Int =
-        theme.resolveColorAttribute(com.google.android.material.R.attr.colorSurfaceContainerHigh)
+    private val activeItemBackgroundColor: Int = ThemeColorHelper.getActiveColor(MaterialR.attr.colorPrimary)
+    private val selectedItemBackgroundColor: Int = ThemeColorHelper.getSelectedColor(MaterialR.attr.colorPrimary)
+
     private val regularItemBackgroundColor: Int =
-        theme.resolveColorAttribute(R.attr.messageListRegularItemBackgroundColor)
-    private val readItemBackgroundColor: Int = theme.resolveColorAttribute(R.attr.messageListReadItemBackgroundColor)
+        theme.resolveColorAttribute(MaterialR.attr.colorSurface)
+    private val readItemBackgroundColor: Int =
+        theme.resolveColorAttribute(MaterialR.attr.colorSurfaceContainerHigh)
     private val unreadItemBackgroundColor: Int =
-        theme.resolveColorAttribute(R.attr.messageListUnreadItemBackgroundColor)
+        theme.resolveColorAttribute(MaterialR.attr.colorSurface)
 
     private val unreadTextColor: Int = theme.resolveColorAttribute(MaterialR.attr.colorOnSurface)
-    private val readTextColor: Int = theme.resolveColorAttribute(MaterialR.attr.colorOnSurfaceVariant)
+    private val readTextColor: Int = theme.resolveColorAttribute(MaterialR.attr.colorOnSurface)
     private val previewTextColor: Int = theme.resolveColorAttribute(MaterialR.attr.colorOnSurfaceVariant)
 
     private val compactVerticalPadding = res.getDimensionPixelSize(R.dimen.messageListCompactVerticalPadding)
@@ -502,8 +500,8 @@ class MessageListAdapter internal constructor(
     private fun setBackgroundColor(view: View, selected: Boolean, read: Boolean, active: Boolean) {
         val backGroundAsReadIndicator = appearance.backGroundAsReadIndicator
         val backgroundColor = when {
-            active -> activeItemBackgroundColor
             selected -> selectedItemBackgroundColor
+            active -> activeItemBackgroundColor
             backGroundAsReadIndicator && read -> readItemBackgroundColor
             backGroundAsReadIndicator && !read -> unreadItemBackgroundColor
             else -> regularItemBackgroundColor
