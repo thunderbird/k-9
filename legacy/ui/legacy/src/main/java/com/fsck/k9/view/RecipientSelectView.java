@@ -60,6 +60,8 @@ public class RecipientSelectView extends TokenCompleteTextView<Recipient> implem
 
     private static final int LOADER_ID_FILTERING = 0;
     private static final int LOADER_ID_ALTERNATES = 1;
+    private static final int DISPLAY_NAME_MAX_LENGTH = 19;
+    private static final int DISPLAY_NAME_TRUNCATED_LENGTH = 16;
 
 
     private final UserInputEmailAddressParser emailAddressParser = DI.get(UserInputEmailAddressParser.class);
@@ -148,7 +150,7 @@ public class RecipientSelectView extends TokenCompleteTextView<Recipient> implem
     private void bindObjectView(Recipient recipient, View view) {
         RecipientTokenViewHolder holder = (RecipientTokenViewHolder) view.getTag();
 
-        holder.vName.setText(recipient.getDisplayNameOrAddress());
+        holder.vName.setText(truncateIfNeeded(recipient.getDisplayNameOrAddress(), DISPLAY_NAME_MAX_LENGTH, DISPLAY_NAME_TRUNCATED_LENGTH));
         if (tokenTextSize != FONT_DEFAULT) {
             holder.vName.setTextSize(TypedValue.COMPLEX_UNIT_SP, tokenTextSize);
         }
@@ -165,6 +167,13 @@ public class RecipientSelectView extends TokenCompleteTextView<Recipient> implem
                 recipient.cryptoStatus == RecipientCryptoStatus.AVAILABLE_UNTRUSTED;
 
         holder.showCryptoState(isAvailable, showCryptoEnabled);
+    }
+
+    private String truncateIfNeeded(String displayName, int maxLength, int truncatedLength) {
+        if (displayName != null && displayName.length() > maxLength) {
+            return displayName.substring(0, truncatedLength) + "...";
+        }
+        return displayName != null ? displayName : "";
     }
 
     @Override
