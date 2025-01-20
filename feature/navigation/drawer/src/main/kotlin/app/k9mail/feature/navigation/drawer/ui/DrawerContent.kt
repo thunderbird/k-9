@@ -41,14 +41,14 @@ internal fun DrawerContent(
                 AccountView(
                     account = selectedAccount,
                     onClick = { onEvent(Event.OnAccountViewClick(selectedAccount)) },
-                    showAvatar = state.showAccountSelector,
+                    showAvatar = state.config.showAccountSelector,
                 )
 
                 DividerHorizontal()
             }
             Row {
                 AnimatedVisibility(
-                    visible = state.showAccountSelector,
+                    visible = state.config.showAccountSelector,
                 ) {
                     AccountList(
                         accounts = state.accounts,
@@ -76,7 +76,7 @@ internal fun DrawerContent(
                     SettingList(
                         onAccountSelectorClick = { onEvent(Event.OnAccountSelectorClick) },
                         onManageFoldersClick = { onEvent(Event.OnManageFoldersClick) },
-                        showAccountSelector = state.showAccountSelector,
+                        showAccountSelector = state.config.showAccountSelector,
                     )
                 }
             }

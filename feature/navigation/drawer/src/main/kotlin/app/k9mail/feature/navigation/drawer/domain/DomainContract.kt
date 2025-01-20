@@ -12,6 +12,10 @@ internal interface DomainContract {
             operator fun invoke(): Flow<DrawerConfig>
         }
 
+        fun interface SaveDrawerConfig {
+            operator fun invoke(drawerConfig: DrawerConfig): Flow<Unit>
+        }
+
         fun interface GetDisplayAccounts {
             operator fun invoke(): Flow<List<DisplayAccount>>
         }

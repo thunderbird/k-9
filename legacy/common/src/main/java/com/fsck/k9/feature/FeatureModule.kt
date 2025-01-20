@@ -13,6 +13,10 @@ val featureLauncherModule = module {
     }
 
     single<NavigationDrawerExternalContract.DrawerConfigLoader> {
-        NavigationDrawerConfigLoader()
+        NavigationDrawerConfigLoader(get())
+    }
+
+    single<NavigationDrawerExternalContract.DrawerConfigWriter> {
+        NavigationDrawerConfigWriter(get())
     }
 }
