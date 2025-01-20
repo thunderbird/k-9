@@ -64,6 +64,7 @@ class RecipientPresenter(
     private val replyToParser: ReplyToParser,
     private val draftStateHeaderParser: AutocryptDraftStateHeaderParser,
 ) {
+    private var isToAddressAdded: Boolean = false
     private lateinit var account: Account
     private var alwaysBccAddresses: Array<Address>? = null
     private var hasContactPicker: Boolean? = null
@@ -254,7 +255,10 @@ class RecipientPresenter(
 
     private fun addToAddresses(vararg toAddresses: Address) {
         addRecipientsFromAddresses(RecipientType.TO, *toAddresses)
+        isToAddressAdded = true
     }
+
+    fun isToAddressAdded() = isToAddressAdded
 
     private fun addCcAddresses(vararg ccAddresses: Address) {
         if (ccAddresses.isNotEmpty()) {
