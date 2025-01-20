@@ -98,6 +98,7 @@
     <string name="read_receipt_enabled">Will request read receipt</string>
     <string name="read_receipt_disabled">Will not request read receipt</string>
     <string name="add_attachment_action">Add attachment</string>
+    <string name="empty_spam_action">Empty Spam</string>
     <string name="empty_trash_action">Empty Trash</string>
     <string name="expunge_action">Expunge</string>
     <string name="about_action">About</string>
@@ -720,6 +721,9 @@
 
     <string name="dialog_confirm_mark_all_as_read_title">Confirm mark all as read</string>
     <string name="dialog_confirm_mark_all_as_read_message">Do you want to mark all messages as read?</string>
+
+    <string name="dialog_confirm_empty_spam_title">Confirm empty spam</string>
+    <string name="dialog_confirm_empty_spam_message">Do you want to empty the spam folder?</string>
 
     <string name="dialog_confirm_empty_trash_title">Confirm empty trash</string>
     <string name="dialog_confirm_empty_trash_message">Do you want to empty the trash folder?</string>

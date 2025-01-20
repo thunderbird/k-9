@@ -46,6 +46,7 @@ import com.fsck.k9.controller.ControllerExtension.ControllerInternals;
 import com.fsck.k9.controller.MessagingControllerCommands.PendingAppend;
 import com.fsck.k9.controller.MessagingControllerCommands.PendingCommand;
 import com.fsck.k9.controller.MessagingControllerCommands.PendingDelete;
+import com.fsck.k9.controller.MessagingControllerCommands.PendingEmptySpam;
 import com.fsck.k9.controller.MessagingControllerCommands.PendingEmptyTrash;
 import com.fsck.k9.controller.MessagingControllerCommands.PendingExpunge;
 import com.fsck.k9.controller.MessagingControllerCommands.PendingMarkAllAsRead;
@@ -2097,6 +2098,58 @@ public class MessagingController implements MessagingControllerRegistry, Messagi
             uids.add(messages.get(i).getUid());
         }
         return uids;
+    }
+
+    void processPendingEmptySpam(Account account) throws MessagingException {
+        if (!account.hasSpamFolder()) {
+            return;
+        }
+
+        long spamFolderId = account.getSpamFolderId();
+        LocalStore localStore = localStoreProvider.getInstance(account);
+        LocalFolder folder = localStore.getFolder(spamFolderId);
+        folder.open();
+        String spamFolderServerId = folder.getServerId();
+
+        Backend backend = getBackend(account);
+        backend.deleteAllMessages(spamFolderServerId);
+
+        // Remove all messages marked as deleted
+        folder.destroyDeletedMessages();
+
+        compact(account);
+    }
+
+    public void emptySpam(final Account account, MessagingListener listener) {
+        putBackground("emptySpam", listener, new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    Long spamFolderId = account.getSpamFolderId();
+                    if (spamFolderId == null) {
+                        Timber.w("No Spam folder configured. Can't empty spam.");
+                        return;
+                    }
+
+                    LocalStore localStore = localStoreProvider.getInstance(account);
+                    LocalFolder localFolder = localStore.getFolder(spamFolderId);
+                    localFolder.open();
+
+                    localFolder.destroyLocalOnlyMessages();
+                    localFolder.setFlags(Collections.singleton(Flag.DELETED), true);
+
+                    for (MessagingListener l : getListeners()) {
+                        l.folderStatusChanged(account, spamFolderId);
+                    }
+
+                    PendingCommand command = PendingEmptySpam.create();
+                    queuePendingCommand(account, command);
+                    processPendingCommands(account);
+                } catch (Exception e) {
+                    Timber.e(e, "emptySpam failed");
+                }
+            }
+        });
     }
 
     void processPendingEmptyTrash(Account account) throws MessagingException {

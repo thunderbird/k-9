@@ -21,6 +21,7 @@ public class MessagingControllerCommands {
     static final String COMMAND_EXPUNGE = "expunge";
     static final String COMMAND_MOVE_OR_COPY = "move_or_copy";
     static final String COMMAND_MOVE_AND_MARK_AS_READ = "move_and_mark_as_read";
+    static final String COMMAND_EMPTY_SPAM = "empty_spam";
     static final String COMMAND_EMPTY_TRASH = "empty_trash";
 
     public abstract static class PendingCommand {
@@ -92,6 +93,22 @@ public class MessagingControllerCommands {
         @Override
         public void execute(MessagingController controller, Account account) throws MessagingException {
             controller.processPendingMoveAndRead(this, account);
+        }
+    }
+
+    public static class PendingEmptySpam extends PendingCommand {
+        public static PendingEmptySpam create() {
+            return new PendingEmptySpam();
+        }
+
+        @Override
+        public String getCommandName() {
+            return COMMAND_EMPTY_SPAM;
+        }
+
+        @Override
+        public void execute(MessagingController controller, Account account) throws MessagingException {
+            controller.processPendingEmptySpam(account);
         }
     }
 

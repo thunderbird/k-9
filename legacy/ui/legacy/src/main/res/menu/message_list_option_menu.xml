@@ -208,6 +208,13 @@
 
     <!-- MessageList -->
     <item
+        android:id="@+id/empty_spam"
+        android:title="@string/empty_spam_action"
+        app:showAsAction="never"
+        />
+
+    <!-- MessageList -->
+    <item
         android:id="@+id/empty_trash"
         android:title="@string/empty_trash_action"
         app:showAsAction="never"

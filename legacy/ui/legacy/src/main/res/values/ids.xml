@@ -2,6 +2,7 @@
 <resources>
 
     <item type="id" name="dialog_confirm_mark_all_as_read" />
+    <item type="id" name="dialog_confirm_empty_spam" />
     <item type="id" name="dialog_confirm_empty_trash" />
     <item type="id" name="dialog_confirm_delete" />
     <item type="id" name="dialog_confirm_spam" />

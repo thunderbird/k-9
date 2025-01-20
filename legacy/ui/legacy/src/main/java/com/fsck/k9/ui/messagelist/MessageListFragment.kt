@@ -738,6 +738,18 @@ class MessageListFragment :
         }
     }
 
+    private fun onEmptySpam() {
+        if (isShowingSpamFolder) {
+            showDialog(R.id.dialog_confirm_empty_spam)
+        }
+    }
+
+    private val isShowingSpamFolder: Boolean
+        get() {
+            if (!isSingleFolderMode) return false
+            return currentFolder!!.databaseId == account!!.spamFolderId
+        }
+
     private fun onEmptyTrash() {
         if (isShowingTrashFolder) {
             showDialog(R.id.dialog_confirm_empty_trash)
@@ -786,6 +798,14 @@ class MessageListFragment :
                 ConfirmationDialogFragment.newInstance(dialogId, title, message, confirmText, cancelText)
             }
 
+            R.id.dialog_confirm_empty_spam -> {
+                val title = getString(R.string.dialog_confirm_empty_spam_title)
+                val message = getString(R.string.dialog_confirm_empty_spam_message)
+                val confirmText = getString(R.string.dialog_confirm_delete_confirm_button)
+                val cancelText = getString(R.string.dialog_confirm_delete_cancel_button)
+                ConfirmationDialogFragment.newInstance(dialogId, title, message, confirmText, cancelText)
+            }
+
             R.id.dialog_confirm_empty_trash -> {
                 val title = getString(R.string.dialog_confirm_empty_trash_title)
                 val message = getString(R.string.dialog_confirm_empty_trash_message)
@@ -820,6 +840,7 @@ class MessageListFragment :
         menu.findItem(R.id.set_sort).isVisible = true
         menu.findItem(R.id.select_all).isVisible = true
         menu.findItem(R.id.mark_all_as_read).isVisible = isMarkAllAsReadSupported
+        menu.findItem(R.id.empty_spam).isVisible = isShowingSpamFolder
         menu.findItem(R.id.empty_trash).isVisible = isShowingTrashFolder
 
         if (isSingleAccountMode) {
@@ -843,6 +864,7 @@ class MessageListFragment :
         menu.findItem(R.id.select_all).isVisible = false
         menu.findItem(R.id.mark_all_as_read).isVisible = false
         menu.findItem(R.id.send_messages).isVisible = false
+        menu.findItem(R.id.empty_spam).isVisible = false
         menu.findItem(R.id.empty_trash).isVisible = false
         menu.findItem(R.id.expunge).isVisible = false
         menu.findItem(R.id.search_everywhere).isVisible = false
@@ -862,6 +884,7 @@ class MessageListFragment :
             R.id.select_all -> selectAll()
             R.id.mark_all_as_read -> confirmMarkAllAsRead()
             R.id.send_messages -> onSendPendingMessages()
+            R.id.empty_spam -> onEmptySpam()
             R.id.empty_trash -> onEmptyTrash()
             R.id.expunge -> onExpunge()
             R.id.search_everywhere -> onSearchEverywhere()
@@ -1225,6 +1248,10 @@ class MessageListFragment :
 
             R.id.dialog_confirm_mark_all_as_read -> {
                 markAllAsRead()
+            }
+
+            R.id.dialog_confirm_empty_spam -> {
+                messagingController.emptySpam(account, null)
             }
 
             R.id.dialog_confirm_empty_trash -> {
