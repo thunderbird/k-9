@@ -3,7 +3,7 @@ name: Daily Builds
 on:
   workflow_dispatch:
   schedule:
-    - cron: '8 20 * * *'
+    - cron: '8 13 * * *'
 
 permissions:
   contents: read
