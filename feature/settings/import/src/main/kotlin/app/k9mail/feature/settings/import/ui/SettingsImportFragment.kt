@@ -44,11 +44,11 @@ class SettingsImportFragment : Fragment() {
         }
     }
 
-    private val pickDocumentResultLauncher = registerForActivityResult(
+    private val pickDocumentLauncher = registerForActivityResult(
         ActivityResultContracts.GetContent(),
         pickDocumentCallback,
     )
-    private val qrCodeScannerResultContract = registerForActivityResult(
+    private val qrCodeScannerLauncher = registerForActivityResult(
         migrationManager.getQrCodeActivityResultContract(),
         pickDocumentCallback,
     )
@@ -226,11 +226,11 @@ class SettingsImportFragment : Fragment() {
     }
 
     private fun pickDocument() {
-        pickDocumentResultLauncher.launch("*/*")
+        pickDocumentLauncher.launch("*/*")
     }
 
     private fun scanQrCode() {
-        qrCodeScannerResultContract.launch(Unit)
+        qrCodeScannerLauncher.launch(Unit)
     }
 
     private fun pickApp() {

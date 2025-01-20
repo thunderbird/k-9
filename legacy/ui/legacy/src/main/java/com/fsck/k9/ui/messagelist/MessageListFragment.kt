@@ -1,6 +1,5 @@
 package com.fsck.k9.ui.messagelist
 
-import android.app.Activity
 import android.app.SearchManager
 import android.content.Context
 import android.content.Intent
@@ -12,6 +11,7 @@ import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.activity.result.ActivityResultLauncher
 import androidx.annotation.StringRes
 import androidx.appcompat.view.ActionMode
 import androidx.core.os.BundleCompat
@@ -51,6 +51,7 @@ import com.fsck.k9.ui.R
 import com.fsck.k9.ui.changelog.RecentChangesActivity
 import com.fsck.k9.ui.changelog.RecentChangesViewModel
 import com.fsck.k9.ui.choosefolder.ChooseFolderActivity
+import com.fsck.k9.ui.choosefolder.ChooseFolderResultContract
 import com.fsck.k9.ui.helper.RelativeDateTimeFormatter
 import com.fsck.k9.ui.messagelist.MessageListFragment.MessageListFragmentListener.Companion.MAX_PROGRESS
 import com.google.android.material.floatingactionbutton.FloatingActionButton
@@ -86,6 +87,19 @@ class MessageListFragment :
     private val handler = MessageListHandler(this)
     private val activityListener = MessageListActivityListener()
     private val actionModeCallback = ActionModeCallback()
+
+    private val chooseFolderToMoveLauncher: ActivityResultLauncher<ChooseFolderResultContract.Input> =
+        registerForActivityResult(ChooseFolderResultContract(ChooseFolderActivity.Action.MOVE)) { result ->
+            handleChooseFolderResult(result) { folderId, messages ->
+                move(messages, folderId)
+            }
+        }
+    private val chooseFolderToCopyLauncher: ActivityResultLauncher<ChooseFolderResultContract.Input> =
+        registerForActivityResult(ChooseFolderResultContract(ChooseFolderActivity.Action.COPY)) { result ->
+            handleChooseFolderResult(result) { folderId, messages ->
+                copy(messages, folderId)
+            }
+        }
 
     private lateinit var fragmentListener: MessageListFragmentListener
 
@@ -705,33 +719,6 @@ class MessageListFragment :
         }
     }
 
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        if (resultCode != Activity.RESULT_OK) return
-
-        when (requestCode) {
-            ACTIVITY_CHOOSE_FOLDER_MOVE,
-            ACTIVITY_CHOOSE_FOLDER_COPY,
-            -> {
-                if (data == null) return
-
-                val destinationFolderId = data.getLongExtra(ChooseFolderActivity.RESULT_SELECTED_FOLDER_ID, -1L)
-                val messages = activeMessages!!
-                if (destinationFolderId != -1L) {
-                    activeMessages = null
-
-                    if (messages.isNotEmpty()) {
-                        MlfUtils.setLastSelectedFolder(accountManager, messages, destinationFolderId)
-                    }
-
-                    when (requestCode) {
-                        ACTIVITY_CHOOSE_FOLDER_MOVE -> move(messages, destinationFolderId)
-                        ACTIVITY_CHOOSE_FOLDER_COPY -> copy(messages, destinationFolderId)
-                    }
-                }
-            }
-        }
-    }
-
     private fun onExpunge() {
         currentFolder?.let { folderInfoHolder ->
             messagingController.expunge(account, folderInfoHolder.databaseId)
@@ -1050,7 +1037,6 @@ class MessageListFragment :
 
         displayFolderChoice(
             operation = FolderOperation.MOVE,
-            requestCode = ACTIVITY_CHOOSE_FOLDER_MOVE,
             sourceFolderId = folderId,
             accountUuid = messages.first().accountUuid,
             lastSelectedFolderId = null,
@@ -1073,7 +1059,6 @@ class MessageListFragment :
 
         displayFolderChoice(
             operation = FolderOperation.COPY,
-            requestCode = ACTIVITY_CHOOSE_FOLDER_COPY,
             sourceFolderId = folderId,
             accountUuid = messages.first().accountUuid,
             lastSelectedFolderId = null,
@@ -1083,29 +1068,43 @@ class MessageListFragment :
 
     private fun displayFolderChoice(
         operation: FolderOperation,
-        requestCode: Int,
         sourceFolderId: Long?,
         accountUuid: String,
         lastSelectedFolderId: Long?,
         messages: List<MessageReference>,
     ) {
-        val action = when (operation) {
-            FolderOperation.COPY -> ChooseFolderActivity.Action.COPY
-            FolderOperation.MOVE -> ChooseFolderActivity.Action.MOVE
-        }
-        val intent = ChooseFolderActivity.buildLaunchIntent(
-            context = requireContext(),
-            action = action,
+        // Remember the selected messages so they are available in the registerForActivityResult() callbacks
+        activeMessages = messages
+
+        val input = ChooseFolderResultContract.Input(
             accountUuid = accountUuid,
             currentFolderId = sourceFolderId,
             scrollToFolderId = lastSelectedFolderId,
-            messageReference = null,
         )
+        when (operation) {
+            FolderOperation.COPY -> chooseFolderToCopyLauncher.launch(input)
+            FolderOperation.MOVE -> chooseFolderToMoveLauncher.launch(input)
+        }
+    }
 
-        // remember the selected messages for #onActivityResult
-        activeMessages = messages
+    private fun handleChooseFolderResult(
+        result: ChooseFolderResultContract.Result?,
+        action: (Long, List<MessageReference>) -> Unit,
+    ) {
+        if (result == null) return
 
-        startActivityForResult(intent, requestCode)
+        val destinationFolderId = result.folderId
+        val messages = activeMessages!!
+
+        if (destinationFolderId != -1L) {
+            activeMessages = null
+
+            if (messages.isNotEmpty()) {
+                MlfUtils.setLastSelectedFolder(accountManager, messages, destinationFolderId)
+            }
+
+            action(destinationFolderId, messages)
+        }
     }
 
     private fun onArchive(message: MessageReference) {

@@ -24,7 +24,7 @@ class SettingsExportFragment : Fragment() {
     private lateinit var settingsExportAdapter: FastAdapter<CheckBoxItem<*>>
     private lateinit var itemAdapter: ItemAdapter<CheckBoxItem<*>>
 
-    private val createDocumentResultLauncher: ActivityResultLauncher<CreateDocumentResultContract.Input> =
+    private val createDocumentLauncher: ActivityResultLauncher<CreateDocumentResultContract.Input> =
         registerForActivityResult(
             CreateDocumentResultContract(),
         ) { contentUri ->
@@ -139,7 +139,7 @@ class SettingsExportFragment : Fragment() {
     }
 
     private fun pickDocument(fileNameSuggestion: String, mimeType: String) {
-        createDocumentResultLauncher.launch(
+        createDocumentLauncher.launch(
             input = CreateDocumentResultContract.Input(
                 title = fileNameSuggestion,
                 mimeType = mimeType,

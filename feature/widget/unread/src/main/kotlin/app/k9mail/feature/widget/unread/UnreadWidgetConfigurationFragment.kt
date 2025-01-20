@@ -25,11 +25,11 @@ class UnreadWidgetConfigurationFragment : PreferenceFragmentCompat() {
     private val repository: UnreadWidgetRepository by inject()
     private val unreadWidgetUpdater: UnreadWidgetUpdater by inject()
 
-    private val chooseAccountResultLauncher: ActivityResultLauncher<Unit> =
+    private val chooseAccountLauncher: ActivityResultLauncher<Unit> =
         registerForActivityResult(UnreadWidgetChooseAccountResultContract()) { accountUuid ->
             handleChooseAccount(accountUuid)
         }
-    private val chooseFolderResultLauncher: ActivityResultLauncher<ChooseFolderResultContract.Input> =
+    private val chooseFolderLauncher: ActivityResultLauncher<ChooseFolderResultContract.Input> =
         registerForActivityResult(ChooseFolderResultContract(action = ChooseFolderActivity.Action.CHOOSE)) { result ->
             if (result != null) {
                 handleChooseFolder(
@@ -56,7 +56,7 @@ class UnreadWidgetConfigurationFragment : PreferenceFragmentCompat() {
 
         unreadAccount = findPreference(PREFERENCE_UNREAD_ACCOUNT)!!
         unreadAccount.onPreferenceClickListener = Preference.OnPreferenceClickListener {
-            chooseAccountResultLauncher.launch(Unit)
+            chooseAccountLauncher.launch(Unit)
             false
         }
 
@@ -70,7 +70,7 @@ class UnreadWidgetConfigurationFragment : PreferenceFragmentCompat() {
 
         unreadFolder = findPreference(PREFERENCE_UNREAD_FOLDER)!!
         unreadFolder.onPreferenceClickListener = Preference.OnPreferenceClickListener {
-            chooseFolderResultLauncher.launch(
+            chooseFolderLauncher.launch(
                 input = ChooseFolderResultContract.Input(
                     accountUuid = selectedAccountUuid!!,
                 ),
