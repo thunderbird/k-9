@@ -1,0 +1,35 @@
+#!/bin/bash
+
+# Please note that this script is quite basic and not recommended for use with public build servers.
+# Since rsync transfers all files from the developer's machine, including potentially sensitive information
+# like secrets or configuration files, it should be used with care.
+
+if ! [ -f build.gradle.kts ]; then
+  echo "No build.gradle.kts found"
+  exit 1
+fi
+
+remote=$GRADLE_REMOTE_SSH
+if [ -z "$remote" ]; then
+  echo "$GRADLE_REMOTE_SSH is not set, please set it to a valid SSH login on your build server"
+  exit 1
+fi
+
+remote_dir=$GRADLE_REMOTE_DIR
+if [ -z "$remote_dir" ]; then
+  echo "$GRADLE_REMOTE_DIR is not set, please set it to the directory where the project should be copied on the build server"
+  exit 1
+fi
+
+remote_project_dir="$GRADLE_REMOTE_DIR/$(basename "$(dirname "$PWD")")_$(basename "$PWD")"
+
+set -e
+
+# Copy the project to the remote
+rsync -irci --exclude build --exclude .gradle --include .gradle/gradle.properties --delete . "$remote:$remote_project_dir"
+
+# Run the gradle command on the remote
+ssh -t "$remote" "cd $remote_project_dir && ./gradlew $*"
+
+# Copy the build directory back
+rsync --delete -ircuq "$remote:$remote_project_dir/build" . | (grep -v '/$' || true)
